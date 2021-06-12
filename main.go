@@ -3,14 +3,15 @@ package main
 import (
 	"fmt"
 	"io/ioutil"
+	"os"
 	"strings"
+	"time"
 
 	"taylz.io/db"
 	"taylz.io/db/mysql"
 	"taylz.io/db/patch"
 	"taylz.io/env"
 	"taylz.io/log"
-	"taylz.io/types"
 )
 
 const (
@@ -25,15 +26,15 @@ const (
 
 // HelpMessage is printed when you use arg "-help" or -"h"
 var HelpMessage = `
-	db-patch runs database migrations
+	db-patch runs sequential .sql files as transactions
 	internally uses (or can create) table "patch" to manage revision number
 
 	--- options
 	[name]			[default]			[comment]
 
-	-help, -h		false				print this help page and then quit
+	version			false				print the version number
 
-	-version, -v		false				print the version number
+	-help, -h		false				print this help page and then quit
 
 	-PATCH_DIR		"./"				directory to load patch files from
 
@@ -48,21 +49,25 @@ var HelpMessage = `
 	-DB_NAME		(required)			database name to connect to within database server
 `
 
-func main() {
-
-	env := env.Values{
+func newenv() env.Values {
+	return env.Values{
 		dbUser: "",
 		dbPswd: "",
 		dbHost: "",
 		dbPort: "",
 		dbName: "",
-	}.ParseDefault()
+	}
+}
+
+func main() {
+	if len(os.Args) > 1 && os.Args[1] == "version" {
+		fmt.Println("taylz.io/cmd/db-patch@" + version)
+	}
+
+	env, _ := newenv().ParseDefault()
 
 	if env["help"] == "true" || env["h"] == "true" {
 		fmt.Print(HelpMessage)
-		return
-	} else if env["version"] == "true" || env["v"] == "true" {
-		fmt.Println("taylz.io/cmd/db-patch@" + version)
 		return
 	}
 
@@ -139,7 +144,7 @@ func main() {
 			"PatchID":   pid,
 			"PatchFile": pf,
 		})
-		tStart := types.NewTime()
+		tStart := time.Now()
 		if sql, err := ioutil.ReadFile(pf); err != nil {
 			log.Add("Error", err).Error("failed to read patch file")
 			return
@@ -150,7 +155,7 @@ func main() {
 			log.Add("Error", err).Error("failed to update patch number")
 			return
 		}
-		log.Add("Time", types.NewTime().Sub(tStart)).Info("applied patch")
+		log.Add("Time", time.Since(tStart)).Info("applied patch")
 	}
 
 	logger.Add("Patch", pid-1).Info("done")
